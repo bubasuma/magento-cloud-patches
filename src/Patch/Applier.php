@@ -110,4 +110,22 @@ class Applier
 
         return StatusPool::NOT_APPLIED;
     }
+
+    /**
+     * Checks if the patch can be applied.
+     *
+     * @param string $patchContent
+     * @return boolean
+     */
+    public function checkApply(string $patchContent): bool
+    {
+        try {
+            $this->processFactory->create(['git', 'apply', '--check'], $patchContent)
+                ->mustRun();
+        } catch (ProcessFailedException $exception) {
+            return false;
+        }
+
+        return true;
+    }
 }

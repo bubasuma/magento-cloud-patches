@@ -12,6 +12,7 @@ use Magento\CloudPatches\Command\Process\ApplyRequired;
 use Magento\CloudPatches\Command\Process\Renderer;
 use Magento\CloudPatches\Patch\Applier;
 use Magento\CloudPatches\Patch\ApplierException;
+use Magento\CloudPatches\Patch\ConflictAnalyzer\Required as ConflictAnalyzer;
 use Magento\CloudPatches\Patch\Data\PatchInterface;
 use Magento\CloudPatches\Patch\Pool\RequiredPool;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -51,6 +52,11 @@ class ApplyRequiredTest extends TestCase
     private $renderer;
 
     /**
+     * @var ConflictAnalyzer|MockObject
+     */
+    private $conflictAnalyzer;
+
+    /**
      * @inheritdoc
      */
     protected function setUp()
@@ -59,12 +65,14 @@ class ApplyRequiredTest extends TestCase
         $this->logger = $this->getMockForAbstractClass(LoggerInterface::class);
         $this->requiredPool = $this->createMock(RequiredPool::class);
         $this->renderer = $this->createMock(Renderer::class);
+        $this->conflictAnalyzer = $this->createMock(ConflictAnalyzer::class);
 
         $this->manager = new ApplyRequired(
             $this->applier,
             $this->requiredPool,
             $this->renderer,
-            $this->logger
+            $this->logger,
+            $this->conflictAnalyzer
         );
     }
 
@@ -126,6 +134,9 @@ class ApplyRequiredTest extends TestCase
         $this->renderer->expects($this->once())
             ->method('formatErrorOutput')
             ->with('Error');
+        $this->conflictAnalyzer->expects($this->once())
+            ->method('analyze')
+            ->withConsecutive([$patch->getId()]);
 
         $this->expectException(RuntimeException::class);
         $this->manager->run($inputMock, $outputMock);

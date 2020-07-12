@@ -18,6 +18,7 @@ use Magento\CloudPatches\Patch\Status\StatusPool;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Magento\CloudPatches\Patch\ConflictAnalyzer\Optional as ConflictAnalyzer;
 
 /**
  * Applies optional patches.
@@ -52,24 +53,32 @@ class ApplyOptionalAction implements ActionInterface
     private $logger;
 
     /**
+     * @var ConflictAnalyzer
+     */
+    private $conflictAnalyzer;
+
+    /**
      * @param Applier $applier
      * @param OptionalPool $optionalPool
      * @param StatusPool $statusPool
      * @param Renderer $renderer
      * @param LoggerInterface $logger
+     * @param ConflictAnalyzer $conflictAnalyzer
      */
     public function __construct(
         Applier $applier,
         OptionalPool $optionalPool,
         StatusPool $statusPool,
         Renderer $renderer,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        ConflictAnalyzer $conflictAnalyzer
     ) {
         $this->applier = $applier;
         $this->optionalPool = $optionalPool;
         $this->statusPool = $statusPool;
         $this->renderer = $renderer;
         $this->logger = $logger;
+        $this->conflictAnalyzer = $conflictAnalyzer;
     }
 
     /**
@@ -95,11 +104,14 @@ class ApplyOptionalAction implements ActionInterface
             } catch (ApplierException $exception) {
                 $this->printPatchApplyingFailed($output, $patch, $exception->getMessage());
                 $this->rollback($output, $appliedPatches);
-
-                throw new RuntimeException(
-                    'Applying optional patches ' . implode(' ', $patchFilter) . ' failed.',
-                    $exception->getCode()
+                $conflictDetails = $this->conflictAnalyzer->analyze($patch->getId(), $patchFilter);
+                $errorMessage = sprintf(
+                    'Applying optional patches %s failed.%s',
+                    implode(' ', $patchFilter),
+                    $conflictDetails ? PHP_EOL . $conflictDetails : ''
                 );
+
+                throw new RuntimeException($errorMessage, $exception->getCode());
             }
         }
     }
@@ -182,7 +194,8 @@ class ApplyOptionalAction implements ActionInterface
      */
     private function rollback(OutputInterface $output, array $appliedPatches)
     {
-        $this->logger->info('Start rollback');
+        $this->logger->info('Start of rollback');
+        $output->writeln('<info>Start of rollback</info>');
 
         foreach (array_reverse($appliedPatches) as $appliedPatch) {
             $message = $this->applier->revert($appliedPatch->getPath(), $appliedPatch->getId());
@@ -190,6 +203,7 @@ class ApplyOptionalAction implements ActionInterface
             $this->logger->info($message, ['file' => $appliedPatch->getPath()]);
         }
 
-        $this->logger->info('End rollback');
+        $this->logger->info('End of rollback');
+        $output->writeln('<info>End of rollback</info>');
     }
 }
